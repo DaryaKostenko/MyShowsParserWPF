@@ -1,31 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using HtmlAgilityPack;
 using LiteDB;
 
 namespace MyShowsParserWPF
 {
-    /// <summary>
-    /// Логика взаимодействия для MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : Window
+    class Parse
     {
-        public int choise;
         public const string NameDb = "ShowsDB.db";
         public const string NameCollection = "showsID";
 
-        public MainWindow()
-        {
-            InitializeComponent();
-        }
-
         //поиск информации по ключу
-        private void GetShowInfo(string id,TextBlock tb,Image img,TextBlock bad)
+        public static ShowInfo GetShowInfo(string id)
         {
             ShowInfo show = new ShowInfo();
             string htmlShowId = "https://myshows.me/view/" + id + "/";
@@ -49,24 +36,24 @@ namespace MyShowsParserWPF
 
                     else if (str.InnerText.Contains("Жанры"))
                         show.Genres = str.InnerText.Replace(" ", string.Empty).Replace("\n", " ").Substring(7);
-                    
+
                     else if (str.InnerText.Contains("Рейтинг MyShows"))
                         show.MyShowsRating =
                             str.InnerText.Trim().Replace("\n", " ").Replace("&thinsp;", string.Empty).Substring(17);
                 }
                 AddShowInDB(show);
                 AddShowInDb_Entity(show);
-                PrintShowInfo(show, tb,img);
+                return show;
             }
             catch (Exception)
             {
-                bad.Text = "Неверный ключ!";
+                return null;
             }
 
         }
 
         //возвращает ид сериала при поиске по слову 
-        private string GetShowId(string htmlShowId)
+        public static string GetShowId(string htmlShowId)
         {
             HtmlWeb web = new HtmlWeb();
             HtmlDocument htmlDoc = web.Load(htmlShowId);
@@ -80,27 +67,12 @@ namespace MyShowsParserWPF
             }
             catch (Exception)
             {
-                badSearch_Word.Text = "По данному запросу ничего не найдено!";
                 return String.Empty;
             }
         }
-
-        //вывод информации о сериале
-        private void PrintShowInfo(ShowInfo show, TextBlock tb,Image img)
-        {
-            Uri uri = new Uri(show.Image);
-            ImageSource source = new BitmapImage(uri);
-            img.Source = source;
-            img.Stretch = Stretch.UniformToFill;
-            tb.Text  = "Сериал: " + show.Name + "\n";
-            tb.Text += "Оригинальное название: " + show.OriginalName + "\n";
-            tb.Text += "Страна: " + show.Country + "\n";
-            tb.Text += "Жанры: " + show.Genres + "\n";
-            tb.Text += "Рейтинг MyShows: " + show.MyShowsRating + "\n";
-        }
-
+        
         //добавление в кэш
-        private void AddShowInDB(ShowInfo show)
+        public static void AddShowInDB(ShowInfo show)
         {
             // открывает базу данных, если ее нет - то создает
             using (var db = new LiteDatabase(NameDb))
@@ -113,7 +85,7 @@ namespace MyShowsParserWPF
         }
 
         //поиск в кэше
-        private ShowInfo SearchInDB_ID(string ID)
+        public static ShowInfo SearchInDB_ID(string ID)
         {
             // открывает базу данных, если ее нет - то создает
             using (var db = new LiteDatabase(NameDb))
@@ -126,7 +98,7 @@ namespace MyShowsParserWPF
         }
 
         //добавить в базу данных
-        private void AddShowInDb_Entity(ShowInfo show)
+        public static void AddShowInDb_Entity(ShowInfo show)
         {
             using (var db = new Context())
             {
@@ -154,7 +126,7 @@ namespace MyShowsParserWPF
         }
 
         //поиск всех фильмов одного автора
-        private List<ShowModel> GetShowsByCountry(string country)
+        public static List<ShowModel> GetShowsByCountry(string country)
         {
             using (var db = new Context())
             {
@@ -163,65 +135,48 @@ namespace MyShowsParserWPF
             }
         }
 
-        //поиск по ID
-        private void bt_Id_Click(object sender, RoutedEventArgs e)
+        //поиск фильма по Id
+        public static ShowInfo GetShowById(string id)
         {
             try
             {
-                var id = tb_Id.Text;
                 var searchRes = SearchInDB_ID(id);
                 if (searchRes == null) //если в кэше нет
-                    GetShowInfo(id, TextBlockID, Img_Id,badSearch_ID);
+                    return GetShowInfo(id);
                 else
                 {
-                    PrintShowInfo(searchRes, TextBlockID, Img_Id);
-                    TextBlockID.Text += "(Информация из кэша)";
+                    return searchRes;
                 }
             }
             catch (Exception)
             {
-                badSearch_ID.Text = "По данному запросу ничего не найдено!";
+                return null;
             }
-
         }
-
-        //поиск по ключевому слову
-        private void bt_Word_Click(object sender, RoutedEventArgs e)
+        
+        //поиск фильма по ключевому слову
+        public static ShowInfo GetShowByWord(string word)
         {
             try
             {
-                var word = tb_Word.Text;
                 string htmlShowWord = "https://myshows.me/search/?q=" + word;
                 var id = GetShowId(htmlShowWord);
                 if (id == String.Empty)
                 {
-                    badSearch_Word.Text = "По данному запросу ничего не найдено!";
-                    return;
+                    return null;
                 }
                 var searchRes = SearchInDB_ID(id);
                 if (searchRes == null) //если в кэше нет
-                    GetShowInfo(id, TextBlockWord, Img_Word,badSearch_Word);
+                    return GetShowInfo(id);
                 else
                 {
-                    PrintShowInfo(searchRes, TextBlockWord, Img_Word);
-                    TextBlockWord.Text += "(Информация из кэша)";
+                    return searchRes;
                 }
             }
             catch (Exception)
             {
-                badSearch_Word.Text = "По данному запросу ничего не найдено!";
+                return null;
             }
         }
-
-        private void bt_Country_Click(object sender, RoutedEventArgs e)
-        {
-            var country = tb_Country.Text;
-            var list = GetShowsByCountry(country);
-            if (list.Count != 0)
-                DataGridInfo.ItemsSource = list;
-            else
-                badSearch_Country.Text = "По данному запросу ничего не найдено";
-        }
-        
     }
 }
